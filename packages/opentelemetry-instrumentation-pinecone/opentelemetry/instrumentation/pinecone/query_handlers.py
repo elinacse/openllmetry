@@ -92,3 +92,68 @@ def set_query_response(span, scores_metric, shared_attributes, response):
                 EventAttributes.DB_QUERY_RESULT_VECTOR.value: match.get("values"),
             },
         )
+
+
+@dont_throw
+def set_update_input_attributes(span, kwargs):
+
+    set_span_attribute(span, SpanAttributes.PINECONE_UPDATE_ID, kwargs.get("id"))
+    set_span_attribute(span, SpanAttributes.PINECONE_UPDATE_VALUES, kwargs.get("values"))
+    set_span_attribute(
+        span, SpanAttributes.PINECONE_UPDATE_NAMESPACE, kwargs.get("namespace")
+    )
+    if isinstance(kwargs.get("set_metadata"), dict):
+        set_span_attribute(
+            span, SpanAttributes.PINECONE_UPDATE_SET_METADATA, json.dumps(kwargs.get("set_metadata"))
+        )
+    else:
+        set_span_attribute(
+            span, SpanAttributes.PINECONE_UPDATE_SET_METADATA, kwargs.get("set_metadata")
+        )
+
+    sparse_values = kwargs.get("sparse_values")
+    if sparse_values:
+        span.add_event(
+            name=f"{Events.DB_QUERY_EMBEDDINGS.value}",
+            attributes={
+                f"{EventAttributes.DB_QUERY_EMBEDDINGS_VECTOR.value}": sparse_values
+            },
+        )
+
+
+@dont_throw
+def set_upsert_input_attributes(span, kwargs):
+
+    set_span_attribute(span, SpanAttributes.PINECONE_UPSERT_BATCH_SIZE, kwargs.get("batch_size"))
+    set_span_attribute(
+        span, SpanAttributes.PINECONE_UPSERT_NAMESPACE, kwargs.get("namespace")
+    )
+    set_span_attribute(
+        span, SpanAttributes.PINECONE_UPSERT_SHOW_PROGRESS, kwargs.get("show_progress")
+    )
+    set_span_attribute(
+        span, SpanAttributes.PINECONE_UPSERT_VECTORS, kwargs.get("vectors")
+    )
+
+
+@dont_throw
+def set_delete_input_attributes(span, kwargs):
+
+    set_span_attribute(span, SpanAttributes.PINECONE_DELETE_IDS, count_or_none(kwargs.get("ids")))
+    set_span_attribute(span, SpanAttributes.PINECONE_DELETE_NAMESPACE, kwargs.get("namespace"))
+    set_span_attribute(span, SpanAttributes.PINECONE_DELETE_DELETE_ALL, kwargs.get("delete_all"))
+    if isinstance(kwargs.get("filter"), dict):
+        set_span_attribute(
+            span, SpanAttributes.PINECONE_DELETE_FILTER, json.dumps(kwargs.get("filter"))
+        )
+    else:
+        set_span_attribute(
+            span, SpanAttributes.PINECONE_DELETE_FILTER, kwargs.get("filter")
+        )
+
+
+def count_or_none(obj):
+    if obj:
+        return len(obj)
+
+    return None

@@ -94,6 +94,18 @@ class SpanAttributes:
     PINECONE_QUERY_NAMESPACE = "pinecone.query.namespace"
     PINECONE_QUERY_QUERIES = "pinecone.query.queries"
     PINECONE_QUERY_TOP_K = "pinecone.query.top_k"
+    PINECONE_UPSERT_NAMESPACE = "pinecone.upsert.namespace"
+    PINECONE_UPSERT_VECTORS = "pinecone.upsert.vectors"
+    PINECONE_UPSERT_BATCH_SIZE = "pinecone.upsert.batch_size"
+    PINECONE_UPSERT_SHOW_PROGRESS = "pinecone.upsert.show_progress"
+    PINECONE_DELETE_IDS = "pinecone.delete.ids"
+    PINECONE_DELETE_NAMESPACE = "pinecone.delete.namespace"
+    PINECONE_DELETE_DELETE_ALL = "pinecone.delete.delete_all"
+    PINECONE_DELETE_FILTER = "pinecone.delete.filter"
+    PINECONE_UPDATE_ID = "pinecone.update.id"
+    PINECONE_UPDATE_NAMESPACE = "pinecone.update.namespace"
+    PINECONE_UPDATE_SET_METADATA = "pinecone.update.set_metadata"
+    PINECONE_UPDATE_VALUES = "pinecone.update.values"    
 
     # LLM Workflows
     TRACELOOP_SPAN_KIND = "traceloop.span.kind"

@@ -26,13 +26,16 @@ from opentelemetry.instrumentation.pinecone.version import __version__
 from opentelemetry.instrumentation.pinecone.query_handlers import (
     set_query_input_attributes,
     set_query_response,
+    set_upsert_input_attributes,
+    set_delete_input_attributes,
+    set_update_input_attributes
 )
 from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.semconv_ai import Meters, SpanAttributes as AISpanAttributes
 
 logger = logging.getLogger(__name__)
 
-_instruments = ("pinecone-client >= 2.2.2, <6",)
+_instruments = ("pinecone >= 2.2.2, <6",)
 
 
 WRAPPED_METHODS = [
@@ -65,6 +68,11 @@ WRAPPED_METHODS = [
         "object": "Index",
         "method": "delete",
         "span_name": "pinecone.delete",
+    },
+    {
+        "object": "Index",
+        "method": "update",
+        "span_name": "pinecone.update",
     },
 ]
 
@@ -165,7 +173,12 @@ def _wrap(
             if span.is_recording():
                 if to_wrap.get("method") == "query":
                     set_query_response(span, scores_metric, shared_attributes, response)
-
+                if to_wrap.get("method") == "upsert":
+                    set_upsert_input_attributes(span, kwargs)
+                if to_wrap.get("method") == "delete":
+                    set_delete_input_attributes(span, kwargs)
+                if to_wrap.get("method") == "update":
+                    set_update_input_attributes(span, kwargs)
                 _set_response_attributes(
                     span,
                     read_units_metric,
