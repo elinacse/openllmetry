@@ -105,7 +105,9 @@ class SpanAttributes:
     PINECONE_UPDATE_ID = "pinecone.update.id"
     PINECONE_UPDATE_NAMESPACE = "pinecone.update.namespace"
     PINECONE_UPDATE_SET_METADATA = "pinecone.update.set_metadata"
-    PINECONE_UPDATE_VALUES = "pinecone.update.values"    
+    PINECONE_UPDATE_VALUES = "pinecone.update.values"
+    PINECONE_FETCH_IDS = "pinecone.fetch.ids"
+    PINECONE_FETCH_NAMESPACE = "pinecone.fetch.namespace"
 
     # LLM Workflows
     TRACELOOP_SPAN_KIND = "traceloop.span.kind"

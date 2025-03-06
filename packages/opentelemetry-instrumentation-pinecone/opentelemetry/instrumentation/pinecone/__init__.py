@@ -28,7 +28,8 @@ from opentelemetry.instrumentation.pinecone.query_handlers import (
     set_query_response,
     set_upsert_input_attributes,
     set_delete_input_attributes,
-    set_update_input_attributes
+    set_update_input_attributes,
+    set_fetch_input_attributes
 )
 from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.semconv_ai import Meters, SpanAttributes as AISpanAttributes
@@ -73,6 +74,11 @@ WRAPPED_METHODS = [
         "object": "Index",
         "method": "update",
         "span_name": "pinecone.update",
+    },
+    {
+        "object": "Index",
+        "method": "fetch",
+        "span_name": "pinecone.fetch",
     },
 ]
 
@@ -179,6 +185,8 @@ def _wrap(
                     set_delete_input_attributes(span, kwargs)
                 if to_wrap.get("method") == "update":
                     set_update_input_attributes(span, kwargs)
+                if to_wrap.get("method") == "fetch":
+                    set_fetch_input_attributes(span, kwargs)
                 _set_response_attributes(
                     span,
                     read_units_metric,

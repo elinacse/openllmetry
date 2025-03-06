@@ -152,6 +152,13 @@ def set_delete_input_attributes(span, kwargs):
         )
 
 
+@dont_throw
+def set_fetch_input_attributes(span, kwargs):
+
+    set_span_attribute(span, SpanAttributes.PINECONE_FETCH_IDS, count_or_none(kwargs.get("ids")))
+    set_span_attribute(span, SpanAttributes.PINECONE_FETCH_NAMESPACE, kwargs.get("namespace"))
+
+
 def count_or_none(obj):
     if obj:
         return len(obj)
