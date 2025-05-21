@@ -1,3 +1,161 @@
+## v0.40.7 (2025-05-20)
+
+### Fix
+
+- **mcp**: Added support for newer version of MCP (#2956)
+- **gemini**: proper chat support (#2948)
+- **milvus**: Add instrumentation for pymilvus MilvusClient hybrid search operation (#2945)
+
+## v0.40.6 (2025-05-16)
+
+### Fix
+
+- **sdk**: support overriding the span processor on_end hook (#2947)
+- **milvus**: Added New Semantic Conventions for pymilvus MilvusClient Hybrid Search (#2944)
+
+## v0.40.5 (2025-05-13)
+
+### Fix
+
+- **langchain**: tools in message history (#2939)
+- **sdk**: Place MCP in its lexical order (#2943)
+
+## v0.40.4 (2025-05-10)
+
+### Fix
+
+- **milvus**: Enhanced Milvus VectorDB Instrumentation for Improved search Monitoring (#2815)
+- **milvus**: Added New Semantic Conventions for Milvus Search (Request for Version Update 0.4.5 -> 0.4.6) (#2883)
+- **MCP**: Added error status to traces in MCP server for tool calls (#2914)
+- **ollama**: pre-imported funcs instrumentation failure (#2871)
+
+## v0.40.3 (2025-05-07)
+
+### Fix
+
+- **langchain**: report token counts when trace content is enabled (#2899)
+- **mcp+anthropic**: vanilla mcp crashed due to argument manipulation (#2881)
+
+## v0.40.2 (2025-04-30)
+
+### Fix
+
+- **ci**: align mcp instrumentation version (#2876)
+
+## v0.40.1 (2025-04-30)
+
+### Fix
+
+- **ci-cd**: add mcp to commitizen (#2875)
+
+## v0.40.0 (2025-04-30)
+
+### Feat
+
+- **instrumentation**: Adding MCP opentelemetry-instrumentation into traceloop (#2829)
+
+## v0.39.4 (2025-04-28)
+
+### Fix
+
+- **sdk**: improve type safety in decorators (#2867)
+
+## v0.39.3 (2025-04-24)
+
+### Fix
+
+- **langchain**: support cached tokens attributes logging (#2830)
+
+## v0.39.2 (2025-04-18)
+
+### Fix
+
+- **openai**: add cache read tokens from returned usage block (#2820)
+- **ollama**: type error in dict combination of ollama instrumentation (#2814)
+- **llama-index**: use the correct instrumentation point (#2807)
+
+## v0.39.1 (2025-04-15)
+
+### Fix
+
+- **sdk**: Loosen tenacity dependency constraint to allow versions up to 10.0 (#2816)
+
+## v0.39.0 (2025-03-25)
+
+### Feat
+
+- **instrumentation**: add metric for Bedrock prompt caching (#2788)
+- **bedrock**: add support for ARN and cross region endpoint (#2785)
+- **instrumentation**: Support Converse APIs and guardrail metrics (#2725)
+
+### Fix
+
+- **bedrock**: add span attr for Bedrock prompt caching (#2789)
+- **anthropic**: add thinking as a separate completion message (#2780)
+- **langchain**: support for date/time in langchain serializations (#2792)
+- **openai**: set user messages as prompts, not completions (#2781)
+- **groq**: exception when metrics are turned off (#2778)
+- **ollama**: Implemented meter in the instrumentation (#2741)
+
+## v0.38.12 (2025-03-07)
+
+### Fix
+
+- **sdk**: client shouldn't be initialized if destination is not traceloop (#2754)
+
+## v0.38.11 (2025-03-06)
+
+### Fix
+
+- **sdk**: When tracing task with no `name` provided , use qualified name instaed of name (#2743)
+
+## v0.38.10 (2025-03-05)
+
+### Fix
+
+- **sdk**: record exceptions (#2733)
+
+## v0.38.9 (2025-03-04)
+
+### Fix
+
+- **milvus**: updated the instrumentation to collect get() and create_collection() span attributes  (#2687)
+- **semconv**: added new semantic conventions for milvus db (#2727)
+
+## v0.38.8 (2025-02-27)
+
+### Fix
+
+- **vertexai**: support generative model chat session tracing (#2689)
+- **groq**: Updated the instrumentation to collect the token histogram (#2685)
+
+## v0.38.7 (2025-02-19)
+
+### Fix
+
+- **langchain**: warning with mixed metadata value types (#2665)
+- **langchain**: handle errors (#2664)
+- **groq**: streaming support (#2663)
+
+## v0.38.6 (2025-02-17)
+
+### Fix
+
+- **sdk**: async generator wrapping (#2635)
+- **instrumentation**: watsonx initialize parameters (#2633)
+
+## v0.38.5 (2025-02-10)
+
+### Fix
+
+- **sdk**: Fix async decorator input & output json encoder (#2629)
+
+## v0.38.4 (2025-02-06)
+
+### Fix
+
+- **sdk**: improve package name detection with type hints and null safety (#2618)
+
 ## v0.38.3 (2025-02-05)
 
 ### Fix

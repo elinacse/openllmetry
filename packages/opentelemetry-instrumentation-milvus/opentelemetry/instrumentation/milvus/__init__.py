@@ -23,6 +23,12 @@ WRAPPED_METHODS = [
     {
         "package": pymilvus,
         "object": "MilvusClient",
+        "method": "create_collection",
+        "span_name": "milvus.create_collection"
+    },
+    {
+        "package": pymilvus,
+        "object": "MilvusClient",
         "method": "insert",
         "span_name": "milvus.insert"
     },
@@ -55,6 +61,12 @@ WRAPPED_METHODS = [
         "object": "MilvusClient",
         "method": "query",
         "span_name": "milvus.query"
+    },
+    {
+        "package": pymilvus,
+        "object": "MilvusClient",
+        "method": "hybrid_search",
+        "span_name": "milvus.hybrid_search"
     },
 ]
 

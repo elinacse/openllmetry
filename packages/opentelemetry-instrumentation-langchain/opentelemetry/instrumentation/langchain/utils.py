@@ -1,8 +1,10 @@
 import dataclasses
+import datetime
 import json
 import logging
 import os
 import traceback
+
 from opentelemetry import context as context_api
 from opentelemetry.instrumentation.langchain.config import Config
 from pydantic import BaseModel
@@ -24,7 +26,15 @@ class CallbackFilteredJSONEncoder(json.JSONEncoder):
         if isinstance(o, BaseModel) and hasattr(o, "model_dump_json"):
             return o.model_dump_json()
 
-        return super().default(o)
+        if isinstance(o, datetime.datetime):
+            return o.isoformat()
+
+        try:
+            return str(o)
+        except Exception:
+            logger = logging.getLogger(__name__)
+            logger.debug("Failed to serialize object of type: %s", type(o).__name__)
+            return ""
 
 
 def should_send_prompts():

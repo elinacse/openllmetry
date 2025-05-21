@@ -1,10 +1,11 @@
 interactions:
 - request:
-    body: '{"max_tokens": 1024, "messages": [{"role": "user", "content": [{"type":
-      "text", "text": "test_anthropic_prompt_caching_async <- IGNORE THIS. ARTICLES
-      START ON THE NEXT LINE\nOpen-Source Library OpenLLMetry Brings LLM Functionality
-      to OpenTelemetry\nTraceloop, a YCombinator-backed company, has announced the
-      release of OpenLLMetry, a new open-source\nlibrary designed to extend OpenTelemetry
+    body: '{"messages": [{"role": "system", "content": "You help generate concise
+      summaries of news articles and blog posts that user sends you."}, {"role": "user",
+      "content": "test_openai_prompt_caching_async <- IGNORE THIS. ARTICLES START
+      ON THE NEXT LINE\nOpen-Source Library OpenLLMetry Brings LLM Functionality to
+      OpenTelemetry\nTraceloop, a YCombinator-backed company, has announced the release
+      of OpenLLMetry, a new open-source\nlibrary designed to extend OpenTelemetry
       with Large Language Model (LLM) functionality. This innovative\ntool aims to
       bridge the gap between traditional application monitoring and the rapidly evolving
       field\nof AI-powered systems. OpenLLMetry builds upon the widely-adopted OpenTelemetry
@@ -68,29 +69,35 @@ interactions:
       Enhances collaboration: New team members can understand and contribute to the
       codebase faster.\n\nRemember: The time invested in unit testing pays off multifold
       in the long run. It''s not just good practice\u2014it''s professional responsibility.\nWhat''s
-      your take on unit testing? Share your experiences below! \ud83d\udc47", "cache_control":
-      {"type": "ephemeral"}}]}], "model": "claude-3-5-sonnet-20240620", "system":
-      [{"type": "text", "text": "You help generate concise summaries of news articles
-      and blog posts that user sends you."}]}'
+      your take on unit testing? Share your experiences below! \ud83d\udc47\n\n========================================================================\n\nThe
+      Rise of Reasoning Models: How \"Think First\" AI Is Transforming Capabilities\n\nA
+      new generation of reasoning models designed to think before responding is dramatically
+      expanding the\nfrontiers of artificial intelligence. These advanced systems,
+      which employ sophisticated deliberative\nprocesses before generating output,
+      are solving problems previously thought to be beyond AI''s reach.\n\n\nUnlike
+      earlier models that produced immediate responses, these reasoning-enhanced AIs
+      take a structured\napproach to complex problems. By breaking down questions
+      into component parts, exploring multiple solution paths,\nand critically evaluating
+      their own reasoning, they achieve significantly higher accuracy on tasks requiring
+      logical\nanalysis, mathematical problem-solving, and nuanced judgment."}], "model":
+      "gpt-4o-mini"}'
     headers:
       accept:
       - application/json
       accept-encoding:
       - gzip, deflate
-      anthropic-beta:
-      - prompt-caching-2024-07-31
-      anthropic-version:
-      - '2023-06-01'
       connection:
       - keep-alive
       content-length:
-      - '5976'
+      - '6740'
       content-type:
       - application/json
       host:
-      - api.anthropic.com
+      - api.openai.com
+      traceparent:
+      - 00-f9a7934c7aabd7bbb16ccd1256f01103-bc17849ea647fb43-01
       user-agent:
-      - AsyncAnthropic/Python 0.36.2
+      - AsyncOpenAI/Python 1.51.2
       x-stainless-arch:
       - arm64
       x-stainless-async:
@@ -100,38 +107,44 @@ interactions:
       x-stainless-os:
       - MacOS
       x-stainless-package-version:
-      - 0.36.2
+      - 1.51.2
       x-stainless-retry-count:
       - '0'
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.3
+      - 3.9.6
     method: POST
-    uri: https://api.anthropic.com/v1/messages?beta=prompt_caching
+    uri: https://api.openai.com/v1/chat/completions
   response:
     body:
       string: !!binary |
-        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
+        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
+        /wMA5gq66cgJAAA=
     headers:
-      CF-Cache-Status:
-      - DYNAMIC
       CF-RAY:
-      - 8d4f5530b89c9800-SJC
+      - 93252a4a298c948d-LHR
       Connection:
       - keep-alive
       Content-Encoding:
@@ -139,38 +152,57 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Sat, 19 Oct 2024 08:17:46 GMT
+      - Fri, 18 Apr 2025 15:23:51 GMT
       Server:
       - cloudflare
+      Set-Cookie:
+      - __cf_bm=t0DbIxA7hcMbMgb4bU_v0fJxTA60OjEuoBmdLQIANUM-1744989831-1.0.1.1-eNKra7qg2o8e9RPh2NoAkN643Tyxppxs1p0QjWxubPObOz8jZqkB8k71ukqPMt5sQ9xMhxpiskrrx..7HCR92YRTCMxzrEVvNAzXsZLnexQ;
+        path=/; expires=Fri, 18-Apr-25 15:53:51 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=3q9Lvs9VtUARA9ljjwE5blCuouSau5xu.0zrQ6RRIrQ-1744989831799-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
       Transfer-Encoding:
       - chunked
-      X-Robots-Tag:
-      - none
-      anthropic-ratelimit-requests-limit:
-      - '50'
-      anthropic-ratelimit-requests-remaining:
-      - '49'
-      anthropic-ratelimit-requests-reset:
-      - '2024-10-19T08:17:55Z'
-      anthropic-ratelimit-tokens-limit:
-      - '40000'
-      anthropic-ratelimit-tokens-remaining:
-      - '40000'
-      anthropic-ratelimit-tokens-reset:
-      - '2024-10-19T08:17:46Z'
-      request-id:
-      - req_014FixcQG3LDMh1PeBuuYNx1
-      via:
-      - 1.1 google
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      openai-organization:
+      - user-xzaeeoqlanzncr8pomspsknu
+      openai-processing-ms:
+      - '5966'
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-ratelimit-limit-requests:
+      - '30000'
+      x-ratelimit-limit-tokens:
+      - '150000000'
+      x-ratelimit-remaining-requests:
+      - '29999'
+      x-ratelimit-remaining-tokens:
+      - '149998385'
+      x-ratelimit-reset-requests:
+      - 2ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_3dcad90b367eefcd5a44201088fedc8e
     status:
       code: 200
       message: OK
 - request:
-    body: '{"max_tokens": 1024, "messages": [{"role": "user", "content": [{"type":
-      "text", "text": "test_anthropic_prompt_caching_async <- IGNORE THIS. ARTICLES
-      START ON THE NEXT LINE\nOpen-Source Library OpenLLMetry Brings LLM Functionality
-      to OpenTelemetry\nTraceloop, a YCombinator-backed company, has announced the
-      release of OpenLLMetry, a new open-source\nlibrary designed to extend OpenTelemetry
+    body: '{"messages": [{"role": "system", "content": "You help generate concise
+      summaries of news articles and blog posts that user sends you."}, {"role": "user",
+      "content": "test_openai_prompt_caching_async <- IGNORE THIS. ARTICLES START
+      ON THE NEXT LINE\nOpen-Source Library OpenLLMetry Brings LLM Functionality to
+      OpenTelemetry\nTraceloop, a YCombinator-backed company, has announced the release
+      of OpenLLMetry, a new open-source\nlibrary designed to extend OpenTelemetry
       with Large Language Model (LLM) functionality. This innovative\ntool aims to
       bridge the gap between traditional application monitoring and the rapidly evolving
       field\nof AI-powered systems. OpenLLMetry builds upon the widely-adopted OpenTelemetry
@@ -234,29 +266,38 @@ interactions:
       Enhances collaboration: New team members can understand and contribute to the
       codebase faster.\n\nRemember: The time invested in unit testing pays off multifold
       in the long run. It''s not just good practice\u2014it''s professional responsibility.\nWhat''s
-      your take on unit testing? Share your experiences below! \ud83d\udc47", "cache_control":
-      {"type": "ephemeral"}}]}], "model": "claude-3-5-sonnet-20240620", "system":
-      [{"type": "text", "text": "You help generate concise summaries of news articles
-      and blog posts that user sends you."}]}'
+      your take on unit testing? Share your experiences below! \ud83d\udc47\n\n========================================================================\n\nThe
+      Rise of Reasoning Models: How \"Think First\" AI Is Transforming Capabilities\n\nA
+      new generation of reasoning models designed to think before responding is dramatically
+      expanding the\nfrontiers of artificial intelligence. These advanced systems,
+      which employ sophisticated deliberative\nprocesses before generating output,
+      are solving problems previously thought to be beyond AI''s reach.\n\n\nUnlike
+      earlier models that produced immediate responses, these reasoning-enhanced AIs
+      take a structured\napproach to complex problems. By breaking down questions
+      into component parts, exploring multiple solution paths,\nand critically evaluating
+      their own reasoning, they achieve significantly higher accuracy on tasks requiring
+      logical\nanalysis, mathematical problem-solving, and nuanced judgment."}], "model":
+      "gpt-4o-mini"}'
     headers:
       accept:
       - application/json
       accept-encoding:
       - gzip, deflate
-      anthropic-beta:
-      - prompt-caching-2024-07-31
-      anthropic-version:
-      - '2023-06-01'
       connection:
       - keep-alive
       content-length:
-      - '5976'
+      - '6740'
       content-type:
       - application/json
+      cookie:
+      - __cf_bm=t0DbIxA7hcMbMgb4bU_v0fJxTA60OjEuoBmdLQIANUM-1744989831-1.0.1.1-eNKra7qg2o8e9RPh2NoAkN643Tyxppxs1p0QjWxubPObOz8jZqkB8k71ukqPMt5sQ9xMhxpiskrrx..7HCR92YRTCMxzrEVvNAzXsZLnexQ;
+        _cfuvid=3q9Lvs9VtUARA9ljjwE5blCuouSau5xu.0zrQ6RRIrQ-1744989831799-0.0.1.1-604800000
       host:
-      - api.anthropic.com
+      - api.openai.com
+      traceparent:
+      - 00-a9f77af33338f1971fcdbf26d9f550a4-1c50433b02d081c4-01
       user-agent:
-      - AsyncAnthropic/Python 0.36.2
+      - AsyncOpenAI/Python 1.51.2
       x-stainless-arch:
       - arm64
       x-stainless-async:
@@ -266,37 +307,44 @@ interactions:
       x-stainless-os:
       - MacOS
       x-stainless-package-version:
-      - 0.36.2
+      - 1.51.2
       x-stainless-retry-count:
       - '0'
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.3
+      - 3.9.6
     method: POST
-    uri: https://api.anthropic.com/v1/messages?beta=prompt_caching
+    uri: https://api.openai.com/v1/chat/completions
   response:
     body:
       string: !!binary |
-        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
+        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
     headers:
-      CF-Cache-Status:
-      - DYNAMIC
       CF-RAY:
-      - 8d4f556a8ab89800-SJC
+      - 93252a711e51948d-LHR
       Connection:
       - keep-alive
       Content-Encoding:
@@ -304,29 +352,41 @@ interactions:
       Content-Type:
       - application/json
       Date:
-      - Sat, 19 Oct 2024 08:17:54 GMT
+      - Fri, 18 Apr 2025 15:23:57 GMT
       Server:
       - cloudflare
       Transfer-Encoding:
       - chunked
-      X-Robots-Tag:
-      - none
-      anthropic-ratelimit-requests-limit:
-      - '50'
-      anthropic-ratelimit-requests-remaining:
-      - '49'
-      anthropic-ratelimit-requests-reset:
-      - '2024-10-19T08:17:55Z'
-      anthropic-ratelimit-tokens-limit:
-      - '40000'
-      anthropic-ratelimit-tokens-remaining:
-      - '40000'
-      anthropic-ratelimit-tokens-reset:
-      - '2024-10-19T08:17:54Z'
-      request-id:
-      - req_01SGDzoRng4LTLJfwrvHzNmT
-      via:
-      - 1.1 google
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      openai-organization:
+      - user-xzaeeoqlanzncr8pomspsknu
+      openai-processing-ms:
+      - '5760'
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-ratelimit-limit-requests:
+      - '30000'
+      x-ratelimit-limit-tokens:
+      - '150000000'
+      x-ratelimit-remaining-requests:
+      - '29999'
+      x-ratelimit-remaining-tokens:
+      - '149998385'
+      x-ratelimit-reset-requests:
+      - 2ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_2d0ed698e26a9cc01a4bbece52ad82eb
     status:
       code: 200
       message: OK

@@ -2,9 +2,9 @@ import os
 import sys
 from pathlib import Path
 
-from typing import Optional, Set
+from typing import Callable, Optional, Set
 from colorama import Fore
-from opentelemetry.sdk.trace import SpanProcessor
+from opentelemetry.sdk.trace import SpanProcessor, ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.sdk.metrics.export import MetricExporter
 from opentelemetry.sdk._logs.export import LogExporter
@@ -66,6 +66,7 @@ class Traceloop:
         instruments: Optional[Set[Instruments]] = None,
         block_instruments: Optional[Set[Instruments]] = None,
         image_uploader: Optional[ImageUploader] = None,
+        span_postprocess_callback: Optional[Callable[[ReadableSpan], None]] = None,
     ) -> Optional[Client]:
         if not enabled:
             TracerWrapper.set_disabled(True)
@@ -86,19 +87,6 @@ class Traceloop:
         api_endpoint = os.getenv("TRACELOOP_BASE_URL") or api_endpoint
         api_key = os.getenv("TRACELOOP_API_KEY") or api_key
         Traceloop.__app_name = app_name
-
-        if (
-            traceloop_sync_enabled
-            and api_endpoint.find("traceloop.com") != -1
-            and api_key
-            and (exporter is None)
-            and (processor is None)
-        ):
-            Traceloop.__fetcher = Fetcher(base_url=api_endpoint, api_key=api_key)
-            Traceloop.__fetcher.run()
-            print(
-                Fore.GREEN + "Traceloop syncing configuration and prompts" + Fore.RESET
-            )
 
         if not is_tracing_enabled():
             print(Fore.YELLOW + "Tracing is disabled" + Fore.RESET)
@@ -160,6 +148,7 @@ class Traceloop:
             image_uploader=image_uploader or ImageUploader(api_endpoint, api_key),
             instruments=instruments,
             block_instruments=block_instruments,
+            span_postprocess_callback=span_postprocess_callback,
         )
 
         if not is_metrics_enabled() or not metrics_exporter and exporter:
@@ -190,10 +179,24 @@ class Traceloop:
             )
             Traceloop.__logger_wrapper = LoggerWrapper(exporter=logging_exporter)
 
-        if not api_key:
-            return
-        Traceloop.__client = Client(api_key=api_key, app_name=app_name, api_endpoint=api_endpoint)
-        return Traceloop.__client
+        if (
+            api_endpoint.find("traceloop.com") != -1
+            and api_key
+            and (exporter is None)
+            and (processor is None)
+        ):
+            if traceloop_sync_enabled:
+                Traceloop.__fetcher = Fetcher(base_url=api_endpoint, api_key=api_key)
+                Traceloop.__fetcher.run()
+                print(
+                    Fore.GREEN
+                    + "Traceloop syncing configuration and prompts"
+                    + Fore.RESET
+                )
+            Traceloop.__client = Client(
+                api_key=api_key, app_name=app_name, api_endpoint=api_endpoint
+            )
+            return Traceloop.__client
 
     def set_association_properties(properties: dict) -> None:
         set_association_properties(properties)

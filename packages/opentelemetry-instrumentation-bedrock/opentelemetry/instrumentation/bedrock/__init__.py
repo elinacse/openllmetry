@@ -1,12 +1,17 @@
 """OpenTelemetry Bedrock instrumentation"""
 
-from functools import wraps
+from functools import partial, wraps
 import json
 import logging
 import os
 import time
 from typing import Collection
 from opentelemetry.instrumentation.bedrock.config import Config
+from opentelemetry.instrumentation.bedrock.guardrail import (
+    guardrail_handling,
+    guardrail_converse,
+)
+from opentelemetry.instrumentation.bedrock.prompt_caching import prompt_caching_handling
 from opentelemetry.instrumentation.bedrock.reusable_streaming_body import (
     ReusableStreamingBody,
 )
@@ -25,7 +30,9 @@ from opentelemetry.instrumentation.utils import (
     unwrap,
 )
 
-from opentelemetry.semconv._incubating.attributes.gen_ai_attributes import GEN_AI_RESPONSE_ID
+from opentelemetry.semconv._incubating.attributes.gen_ai_attributes import (
+    GEN_AI_RESPONSE_ID,
+)
 from opentelemetry.semconv_ai import (
     SUPPRESS_LANGUAGE_MODEL_INSTRUMENTATION_KEY,
     SpanAttributes,
@@ -43,6 +50,14 @@ class MetricParams:
         choice_counter: Counter,
         duration_histogram: Histogram,
         exception_counter: Counter,
+        guardrail_activation: Counter,
+        guardrail_latency_histogram: Histogram,
+        guardrail_coverage: Counter,
+        guardrail_sensitive_info: Counter,
+        guardrail_topic: Counter,
+        guardrail_content: Counter,
+        guardrail_words: Counter,
+        prompt_caching: Counter,
     ):
         self.vendor = ""
         self.model = ""
@@ -51,6 +66,14 @@ class MetricParams:
         self.choice_counter = choice_counter
         self.duration_histogram = duration_histogram
         self.exception_counter = exception_counter
+        self.guardrail_activation = guardrail_activation
+        self.guardrail_latency_histogram = guardrail_latency_histogram
+        self.guardrail_coverage = guardrail_coverage
+        self.guardrail_sensitive_info = guardrail_sensitive_info
+        self.guardrail_topic = guardrail_topic
+        self.guardrail_content = guardrail_content
+        self.guardrail_words = guardrail_words
+        self.prompt_caching = prompt_caching
         self.start_time = time.time()
 
 
@@ -68,6 +91,9 @@ WRAPPED_METHODS = [
     },
     {"package": "botocore.session", "object": "Session", "method": "create_client"},
 ]
+
+_BEDROCK_INVOKE_SPAN_NAME = "bedrock.completion"
+_BEDROCK_CONVERSE_SPAN_NAME = "bedrock.converse"
 
 
 def should_send_prompts():
@@ -138,6 +164,12 @@ def _wrap(
                     client.invoke_model_with_response_stream, tracer, metric_params
                 )
             )
+            client.converse = _instrumented_converse(
+                client.converse, tracer, metric_params
+            )
+            client.converse_stream = _instrumented_converse_stream(
+                client.converse_stream, tracer, metric_params
+            )
             return client
         except Exception as e:
             end_time = time.time()
@@ -164,7 +196,7 @@ def _instrumented_model_invoke(fn, tracer, metric_params):
             return fn(*args, **kwargs)
 
         with tracer.start_as_current_span(
-            "bedrock.completion", kind=SpanKind.CLIENT
+            _BEDROCK_INVOKE_SPAN_NAME, kind=SpanKind.CLIENT
         ) as span:
             response = fn(*args, **kwargs)
 
@@ -182,7 +214,7 @@ def _instrumented_model_invoke_with_response_stream(fn, tracer, metric_params):
         if context_api.get_value(SUPPRESS_LANGUAGE_MODEL_INSTRUMENTATION_KEY):
             return fn(*args, **kwargs)
 
-        span = tracer.start_span("bedrock.completion", kind=SpanKind.CLIENT)
+        span = tracer.start_span(_BEDROCK_INVOKE_SPAN_NAME, kind=SpanKind.CLIENT)
         response = fn(*args, **kwargs)
 
         if span.is_recording():
@@ -193,50 +225,71 @@ def _instrumented_model_invoke_with_response_stream(fn, tracer, metric_params):
     return with_instrumentation
 
 
+def _instrumented_converse(fn, tracer, metric_params):
+    # see
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime/client/converse.html
+    # for the request/response format
+    @wraps(fn)
+    def with_instrumentation(*args, **kwargs):
+        if context_api.get_value(SUPPRESS_LANGUAGE_MODEL_INSTRUMENTATION_KEY):
+            return fn(*args, **kwargs)
+
+        with tracer.start_as_current_span(
+            _BEDROCK_CONVERSE_SPAN_NAME, kind=SpanKind.CLIENT
+        ) as span:
+            response = fn(*args, **kwargs)
+            _handle_converse(span, kwargs, response, metric_params)
+
+            return response
+
+    return with_instrumentation
+
+
+def _instrumented_converse_stream(fn, tracer, metric_params):
+    @wraps(fn)
+    def with_instrumentation(*args, **kwargs):
+        if context_api.get_value(SUPPRESS_LANGUAGE_MODEL_INSTRUMENTATION_KEY):
+            return fn(*args, **kwargs)
+
+        span = tracer.start_span(_BEDROCK_CONVERSE_SPAN_NAME, kind=SpanKind.CLIENT)
+        response = fn(*args, **kwargs)
+        if span.is_recording():
+            _handle_converse_stream(span, kwargs, response, metric_params)
+
+        return response
+
+    return with_instrumentation
+
+
+@dont_throw
 def _handle_stream_call(span, kwargs, response, metric_params):
+
+    (vendor, model) = _get_vendor_model(kwargs.get("modelId"))
+    request_body = json.loads(kwargs.get("body"))
+
+    headers = {}
+    if "ResponseMetadata" in response:
+        headers = response.get("ResponseMetadata").get("HTTPHeaders", {})
+
     @dont_throw
     def stream_done(response_body):
-        request_body = json.loads(kwargs.get("body"))
-
-        (vendor, model) = kwargs.get("modelId").split(".")
 
         metric_params.vendor = vendor
         metric_params.model = model
         metric_params.is_stream = True
 
-        response_model = response_body.get("model")
-        response_id = response_body.get("id")
+        prompt_caching_handling(headers, vendor, model, metric_params)
+        guardrail_handling(response_body, vendor, model, metric_params)
 
-        _set_span_attribute(span, SpanAttributes.LLM_SYSTEM, vendor)
-        _set_span_attribute(span, SpanAttributes.LLM_REQUEST_MODEL, model)
-        _set_span_attribute(span, SpanAttributes.LLM_RESPONSE_MODEL, response_model)
-        _set_span_attribute(span, GEN_AI_RESPONSE_ID, response_id)
-
-        if vendor == "cohere":
-            _set_cohere_span_attributes(
-                span, request_body, response_body, metric_params
-            )
-        elif vendor == "anthropic":
-            if "prompt" in request_body:
-                _set_anthropic_completion_span_attributes(
-                    span, request_body, response_body, metric_params
-                )
-            elif "messages" in request_body:
-                _set_anthropic_messages_span_attributes(
-                    span, request_body, response_body, metric_params
-                )
-        elif vendor == "ai21":
-            _set_ai21_span_attributes(span, request_body, response_body, metric_params)
-        elif vendor == "meta":
-            _set_llama_span_attributes(span, request_body, response_body, metric_params)
-        elif vendor == "amazon":
-            _set_amazon_span_attributes(
-                span, request_body, response_body, metric_params
-            )
+        _set_model_span_attributes(
+            vendor, model, span, request_body, response_body, headers, metric_params
+        )
 
         span.end()
 
-    response["body"] = StreamingWrapper(response["body"], stream_done)
+    response["body"] = StreamingWrapper(
+        response["body"], stream_done_callback=stream_done
+    )
 
 
 @dont_throw
@@ -246,38 +299,199 @@ def _handle_call(span, kwargs, response, metric_params):
     )
     request_body = json.loads(kwargs.get("body"))
     response_body = json.loads(response.get("body").read())
+    headers = {}
+    if "ResponseMetadata" in response:
+        headers = response.get("ResponseMetadata").get("HTTPHeaders", {})
 
-    (vendor, model) = kwargs.get("modelId").split(".")
-
+    (vendor, model) = _get_vendor_model(kwargs.get("modelId"))
     metric_params.vendor = vendor
     metric_params.model = model
     metric_params.is_stream = False
 
-    response_model = response_body.get("model")
-    response_id = response_body.get("id")
+    prompt_caching_handling(headers, vendor, model, metric_params)
+    guardrail_handling(response_body, vendor, model, metric_params)
+
+    _set_model_span_attributes(
+        vendor, model, span, request_body, response_body, headers, metric_params
+    )
+
+
+@dont_throw
+def _handle_converse(span, kwargs, response, metric_params):
+    (vendor, model) = _get_vendor_model(kwargs.get("modelId"))
+    guardrail_converse(response, vendor, model, metric_params)
 
     _set_span_attribute(span, SpanAttributes.LLM_SYSTEM, vendor)
     _set_span_attribute(span, SpanAttributes.LLM_REQUEST_MODEL, model)
-    _set_span_attribute(span, SpanAttributes.LLM_RESPONSE_MODEL, response_model)
-    _set_span_attribute(span, GEN_AI_RESPONSE_ID, response_id)
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_TYPE, LLMRequestTypeValues.CHAT.value
+    )
 
-    if vendor == "cohere":
-        _set_cohere_span_attributes(span, request_body, response_body, metric_params)
-    elif vendor == "anthropic":
-        if "prompt" in request_body:
-            _set_anthropic_completion_span_attributes(
-                span, request_body, response_body, metric_params
+    config = {}
+    if "inferenceConfig" in kwargs:
+        config = kwargs.get("inferenceConfig")
+
+    _set_span_attribute(span, SpanAttributes.LLM_REQUEST_TOP_P, config.get("topP"))
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_TEMPERATURE, config.get("temperature")
+    )
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_MAX_TOKENS, config.get("maxTokens")
+    )
+
+    _converse_usage_record(span, response, metric_params)
+
+    if should_send_prompts():
+        _report_converse_input_prompt(kwargs, span)
+
+        if "output" in response:
+            message = response["output"]["message"]
+            _set_span_attribute(
+                span, f"{SpanAttributes.LLM_COMPLETIONS}.0.role", message.get("role")
             )
-        elif "messages" in request_body:
-            _set_anthropic_messages_span_attributes(
-                span, request_body, response_body, metric_params
+            for idx, content in enumerate(message["content"]):
+                _set_span_attribute(
+                    span,
+                    f"{SpanAttributes.LLM_COMPLETIONS}.{idx}.content",
+                    content.get("text"),
+                )
+
+
+@dont_throw
+def _handle_converse_stream(span, kwargs, response, metric_params):
+    (vendor, model) = _get_vendor_model(kwargs.get("modelId"))
+
+    _set_span_attribute(span, SpanAttributes.LLM_SYSTEM, vendor)
+    _set_span_attribute(span, SpanAttributes.LLM_REQUEST_MODEL, model)
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_TYPE, LLMRequestTypeValues.CHAT.value
+    )
+
+    config = {}
+    if "inferenceConfig" in kwargs:
+        config = kwargs.get("inferenceConfig")
+
+    _set_span_attribute(span, SpanAttributes.LLM_REQUEST_TOP_P, config.get("topP"))
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_TEMPERATURE, config.get("temperature")
+    )
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_MAX_TOKENS, config.get("maxTokens")
+    )
+
+    if should_send_prompts():
+        _report_converse_input_prompt(kwargs, span)
+
+    stream = response.get("stream")
+    if stream:
+
+        def handler(func):
+            def wrap(*args, **kwargs):
+                response_msg = kwargs.pop("response_msg")
+                span = kwargs.pop("span")
+                event = func(*args, **kwargs)
+                if "contentBlockDelta" in event:
+                    response_msg.append(event["contentBlockDelta"]["delta"]["text"])
+                elif "messageStart" in event:
+                    if should_send_prompts():
+                        role = event["messageStart"]["role"]
+                        _set_span_attribute(
+                            span, f"{SpanAttributes.LLM_COMPLETIONS}.0.role", role
+                        )
+                elif "metadata" in event:
+                    # last message sent
+                    guardrail_converse(event["metadata"], vendor, model, metric_params)
+                    _converse_usage_record(span, event["metadata"], metric_params)
+                    span.end()
+                elif "messageStop" in event:
+                    if should_send_prompts():
+                        _set_span_attribute(
+                            span,
+                            f"{SpanAttributes.LLM_COMPLETIONS}.0.content",
+                            "".join(response_msg),
+                        )
+                return event
+
+            return partial(wrap, response_msg=[], span=span)
+
+        stream._parse_event = handler(stream._parse_event)
+
+
+def _get_vendor_model(modelId):
+    # Docs:
+    # https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles-support.html#inference-profiles-support-system
+    vendor = "imported_model"
+    model = modelId
+
+    if modelId is not None and modelId.startswith("arn"):
+        components = modelId.split(":")
+        if len(components) > 5:
+            inf_profile = components[5].split("/")
+            if len(inf_profile) == 2:
+                if "." in inf_profile[1]:
+                    (vendor, model) = _cross_region_check(inf_profile[1])
+    elif modelId is not None and "." in modelId:
+        (vendor, model) = _cross_region_check(modelId)
+
+    return vendor, model
+
+
+def _cross_region_check(value):
+    prefixes = ["us", "us-gov", "eu", "apac"]
+    if any(value.startswith(prefix + ".") for prefix in prefixes):
+        parts = value.split(".")
+        if len(parts) > 2:
+            parts.pop(0)
+        return parts[0], parts[1]
+    else:
+        (vendor, model) = value.split(".")
+    return vendor, model
+
+
+def _report_converse_input_prompt(kwargs, span):
+    prompt_idx = 0
+    if "system" in kwargs:
+        for idx, prompt in enumerate(kwargs["system"]):
+            prompt_idx = idx + 1
+            _set_span_attribute(
+                span, f"{SpanAttributes.LLM_PROMPTS}.{idx}.role", "system"
             )
-    elif vendor == "ai21":
-        _set_ai21_span_attributes(span, request_body, response_body, metric_params)
-    elif vendor == "meta":
-        _set_llama_span_attributes(span, request_body, response_body, metric_params)
-    elif vendor == "amazon":
-        _set_amazon_span_attributes(span, request_body, response_body, metric_params)
+            # TODO: add support for "image"
+            _set_span_attribute(
+                span,
+                f"{SpanAttributes.LLM_PROMPTS}.{idx}.content",
+                prompt.get("text"),
+            )
+    if "messages" in kwargs:
+        for idx, prompt in enumerate(kwargs["messages"]):
+            _set_span_attribute(
+                span,
+                f"{SpanAttributes.LLM_PROMPTS}.{prompt_idx+idx}.role",
+                prompt.get("role"),
+            )
+            # TODO: here we stringify the object, consider moving these to events or prompt.{i}.content.{j}
+            _set_span_attribute(
+                span,
+                f"{SpanAttributes.LLM_PROMPTS}.{prompt_idx+idx}.content",
+                json.dumps(prompt.get("content", ""), default=str),
+            )
+
+
+def _converse_usage_record(span, response, metric_params):
+    prompt_tokens = 0
+    completion_tokens = 0
+    if "usage" in response:
+        if "inputTokens" in response["usage"]:
+            prompt_tokens = response["usage"]["inputTokens"]
+        if "outputTokens" in response["usage"]:
+            completion_tokens = response["usage"]["outputTokens"]
+
+    _record_usage_to_span(
+        span,
+        prompt_tokens,
+        completion_tokens,
+        metric_params,
+    )
 
 
 def _record_usage_to_span(span, prompt_tokens, completion_tokens, metric_params):
@@ -343,6 +557,41 @@ def _metric_shared_attributes(
         SpanAttributes.LLM_SYSTEM: "bedrock",
         "stream": is_streaming,
     }
+
+
+def _set_model_span_attributes(
+    vendor, model, span, request_body, response_body, headers, metric_params
+):
+
+    response_model = response_body.get("model")
+    response_id = response_body.get("id")
+
+    _set_span_attribute(span, SpanAttributes.LLM_SYSTEM, vendor)
+    _set_span_attribute(span, SpanAttributes.LLM_REQUEST_MODEL, model)
+    _set_span_attribute(span, SpanAttributes.LLM_RESPONSE_MODEL, response_model)
+    _set_span_attribute(span, GEN_AI_RESPONSE_ID, response_id)
+
+    if vendor == "cohere":
+        _set_cohere_span_attributes(span, request_body, response_body, metric_params)
+    elif vendor == "anthropic":
+        if "prompt" in request_body:
+            _set_anthropic_completion_span_attributes(
+                span, request_body, response_body, metric_params
+            )
+        elif "messages" in request_body:
+            _set_anthropic_messages_span_attributes(
+                span, request_body, response_body, metric_params
+            )
+    elif vendor == "ai21":
+        _set_ai21_span_attributes(span, request_body, response_body, metric_params)
+    elif vendor == "meta":
+        _set_llama_span_attributes(span, request_body, response_body, metric_params)
+    elif vendor == "amazon":
+        _set_amazon_span_attributes(
+            span, request_body, response_body, headers, metric_params
+        )
+    elif vendor == "imported_model":
+        _set_imported_model_span_attributes(span, request_body, response_body, metric_params)
 
 
 def _set_cohere_span_attributes(span, request_body, response_body, metric_params):
@@ -603,37 +852,165 @@ def _set_llama_span_attributes(span, request_body, response_body, metric_params)
                 )
 
 
-def _set_amazon_span_attributes(span, request_body, response_body, metric_params):
+def _set_amazon_span_attributes(
+    span, request_body, response_body, headers, metric_params
+):
     _set_span_attribute(
         span, SpanAttributes.LLM_REQUEST_TYPE, LLMRequestTypeValues.COMPLETION.value
     )
-    config = request_body.get("textGenerationConfig", {})
-    _set_span_attribute(span, SpanAttributes.LLM_REQUEST_TOP_P, config.get("topP"))
-    _set_span_attribute(
-        span, SpanAttributes.LLM_REQUEST_TEMPERATURE, config.get("temperature")
-    )
-    _set_span_attribute(
-        span, SpanAttributes.LLM_REQUEST_MAX_TOKENS, config.get("maxTokenCount")
-    )
+
+    if "textGenerationConfig" in request_body:
+        config = request_body.get("textGenerationConfig", {})
+        _set_span_attribute(span, SpanAttributes.LLM_REQUEST_TOP_P, config.get("topP"))
+        _set_span_attribute(
+            span, SpanAttributes.LLM_REQUEST_TEMPERATURE, config.get("temperature")
+        )
+        _set_span_attribute(
+            span, SpanAttributes.LLM_REQUEST_MAX_TOKENS, config.get("maxTokenCount")
+        )
+    elif "inferenceConfig" in request_body:
+        config = request_body.get("inferenceConfig", {})
+        _set_span_attribute(span, SpanAttributes.LLM_REQUEST_TOP_P, config.get("topP"))
+        _set_span_attribute(
+            span, SpanAttributes.LLM_REQUEST_TEMPERATURE, config.get("temperature")
+        )
+        _set_span_attribute(
+            span, SpanAttributes.LLM_REQUEST_MAX_TOKENS, config.get("maxTokens")
+        )
+
+    total_completion_tokens = 0
+    total_prompt_tokens = 0
+    if "results" in response_body:
+        total_prompt_tokens = int(response_body.get("inputTextTokenCount", 0))
+        for result in response_body.get("results"):
+            if "tokenCount" in result:
+                total_completion_tokens += int(result.get("tokenCount", 0))
+            elif "totalOutputTextTokenCount" in result:
+                total_completion_tokens += int(
+                    result.get("totalOutputTextTokenCount", 0)
+                )
+    elif "usage" in response_body:
+        total_prompt_tokens += int(response_body.get("inputTokens", 0))
+        total_completion_tokens += int(
+            headers.get("x-amzn-bedrock-output-token-count", 0)
+        )
+    # checks for Titan models
+    if "inputTextTokenCount" in response_body:
+        total_prompt_tokens = response_body.get("inputTextTokenCount")
+    if "totalOutputTextTokenCount" in response_body:
+        total_completion_tokens = response_body.get("totalOutputTextTokenCount")
 
     _record_usage_to_span(
         span,
-        response_body.get("inputTextTokenCount"),
-        sum(int(result.get("tokenCount")) for result in response_body.get("results")),
+        total_prompt_tokens,
+        total_completion_tokens,
         metric_params,
     )
 
     if should_send_prompts():
-        _set_span_attribute(
-            span, f"{SpanAttributes.LLM_PROMPTS}.0.user", request_body.get("inputText")
-        )
-
-        for i, result in enumerate(response_body.get("results")):
+        if "inputText" in request_body:
             _set_span_attribute(
                 span,
-                f"{SpanAttributes.LLM_COMPLETIONS}.{i}.content",
-                result.get("outputText"),
+                f"{SpanAttributes.LLM_PROMPTS}.0.user",
+                request_body.get("inputText"),
             )
+        else:
+            prompt_idx = 0
+            if "system" in request_body:
+                for idx, prompt in enumerate(request_body["system"]):
+                    prompt_idx = idx + 1
+                    _set_span_attribute(
+                        span, f"{SpanAttributes.LLM_PROMPTS}.{idx}.role", "system"
+                    )
+                    # TODO: add support for "image"
+                    _set_span_attribute(
+                        span,
+                        f"{SpanAttributes.LLM_PROMPTS}.{idx}.content",
+                        prompt.get("text"),
+                    )
+            for idx, prompt in enumerate(request_body["messages"]):
+                _set_span_attribute(
+                    span,
+                    f"{SpanAttributes.LLM_PROMPTS}.{prompt_idx+idx}.role",
+                    prompt.get("role"),
+                )
+                # TODO: here we stringify the object, consider moving these to events or prompt.{i}.content.{j}
+                _set_span_attribute(
+                    span,
+                    f"{SpanAttributes.LLM_PROMPTS}.{prompt_idx+idx}.content",
+                    json.dumps(prompt.get("content", ""), default=str),
+                )
+
+        if "results" in response_body:
+            for i, result in enumerate(response_body.get("results")):
+                _set_span_attribute(
+                    span,
+                    f"{SpanAttributes.LLM_COMPLETIONS}.{i}.content",
+                    result.get("outputText"),
+                )
+        elif "outputText" in response_body:
+            _set_span_attribute(
+                span,
+                f"{SpanAttributes.LLM_COMPLETIONS}.0.content",
+                response_body.get("outputText"),
+            )
+        elif "output" in response_body:
+            msgs = response_body.get("output").get("message", {}).get("content", [])
+            for idx, msg in enumerate(msgs):
+                _set_span_attribute(
+                    span,
+                    f"{SpanAttributes.LLM_COMPLETIONS}.{idx}.content",
+                    msg.get("text"),
+                )
+
+
+def _set_imported_model_span_attributes(span, request_body, response_body, metric_params):
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_TYPE, LLMRequestTypeValues.COMPLETION.value
+    )
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_TOP_P, request_body.get("topP")
+    )
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_TEMPERATURE, request_body.get("temperature")
+    )
+    _set_span_attribute(
+        span, SpanAttributes.LLM_REQUEST_MAX_TOKENS, request_body.get("max_tokens")
+    )
+    prompt_tokens = (
+        response_body.get("usage", {}).get("prompt_tokens")
+        if response_body.get("usage", {}).get("prompt_tokens") is not None
+        else response_body.get("prompt_token_count")
+    )
+    completion_tokens = response_body.get("usage", {}).get(
+        "completion_tokens"
+    ) or response_body.get("generation_token_count")
+
+    _record_usage_to_span(span, prompt_tokens, completion_tokens, metric_params, )
+
+    if should_send_prompts():
+        _set_span_attribute(
+            span, f"{SpanAttributes.LLM_PROMPTS}.0.content", request_body.get("prompt")
+        )
+        _set_span_attribute(
+                span, f"{SpanAttributes.LLM_COMPLETIONS}.0.content",
+                response_body.get("generation"),
+            )
+
+
+class GuardrailMeters:
+    LLM_BEDROCK_GUARDRAIL_ACTIVATION = "gen_ai.bedrock.guardrail.activation"
+    LLM_BEDROCK_GUARDRAIL_LATENCY = "gen_ai.bedrock.guardrail.latency"
+    LLM_BEDROCK_GUARDRAIL_COVERAGE = "gen_ai.bedrock.guardrail.coverage"
+    LLM_BEDROCK_GUARDRAIL_SENSITIVE = "gen_ai.bedrock.guardrail.sensitive_info"
+    LLM_BEDROCK_GUARDRAIL_TOPICS = "gen_ai.bedrock.guardrail.topics"
+    LLM_BEDROCK_GUARDRAIL_CONTENT = "gen_ai.bedrock.guardrail.content"
+    LLM_BEDROCK_GUARDRAIL_WORDS = "gen_ai.bedrock.guardrail.words"
+
+
+class PromptCaching:
+    # will be moved under the AI SemConv. Not namespaced since also OpenAI supports this.
+    LLM_BEDROCK_PROMPT_CACHING = "gen_ai.prompt.caching"
 
 
 def _create_metrics(meter: Meter):
@@ -662,7 +1039,70 @@ def _create_metrics(meter: Meter):
         description="Number of exceptions occurred during chat completions",
     )
 
-    return token_histogram, choice_counter, duration_histogram, exception_counter
+    # Guardrail metrics
+    guardrail_activation = meter.create_counter(
+        name=GuardrailMeters.LLM_BEDROCK_GUARDRAIL_ACTIVATION,
+        unit="",
+        description="Number of guardrail activation",
+    )
+
+    guardrail_latency_histogram = meter.create_histogram(
+        name=GuardrailMeters.LLM_BEDROCK_GUARDRAIL_LATENCY,
+        unit="ms",
+        description="GenAI guardrail latency",
+    )
+
+    guardrail_coverage = meter.create_counter(
+        name=GuardrailMeters.LLM_BEDROCK_GUARDRAIL_COVERAGE,
+        unit="char",
+        description="GenAI guardrail coverage",
+    )
+
+    guardrail_sensitive_info = meter.create_counter(
+        name=GuardrailMeters.LLM_BEDROCK_GUARDRAIL_SENSITIVE,
+        unit="",
+        description="GenAI guardrail sensitive information protection",
+    )
+
+    guardrail_topic = meter.create_counter(
+        name=GuardrailMeters.LLM_BEDROCK_GUARDRAIL_TOPICS,
+        unit="",
+        description="GenAI guardrail topics protection",
+    )
+
+    guardrail_content = meter.create_counter(
+        name=GuardrailMeters.LLM_BEDROCK_GUARDRAIL_CONTENT,
+        unit="",
+        description="GenAI guardrail content filter protection",
+    )
+
+    guardrail_words = meter.create_counter(
+        name=GuardrailMeters.LLM_BEDROCK_GUARDRAIL_WORDS,
+        unit="",
+        description="GenAI guardrail words filter protection",
+    )
+
+    # Prompt Caching
+    prompt_caching = meter.create_counter(
+        name=PromptCaching.LLM_BEDROCK_PROMPT_CACHING,
+        unit="",
+        description="Number of cached tokens",
+    )
+
+    return (
+        token_histogram,
+        choice_counter,
+        duration_histogram,
+        exception_counter,
+        guardrail_activation,
+        guardrail_latency_histogram,
+        guardrail_coverage,
+        guardrail_sensitive_info,
+        guardrail_topic,
+        guardrail_content,
+        guardrail_words,
+        prompt_caching,
+    )
 
 
 class BedrockInstrumentor(BaseInstrumentor):
@@ -690,6 +1130,14 @@ class BedrockInstrumentor(BaseInstrumentor):
                 choice_counter,
                 duration_histogram,
                 exception_counter,
+                guardrail_activation,
+                guardrail_latency_histogram,
+                guardrail_coverage,
+                guardrail_sensitive_info,
+                guardrail_topic,
+                guardrail_content,
+                guardrail_words,
+                prompt_caching,
             ) = _create_metrics(meter)
         else:
             (
@@ -697,10 +1145,29 @@ class BedrockInstrumentor(BaseInstrumentor):
                 choice_counter,
                 duration_histogram,
                 exception_counter,
-            ) = (None, None, None, None)
+                guardrail_activation,
+                guardrail_latency_histogram,
+                guardrail_coverage,
+                guardrail_sensitive_info,
+                guardrail_topic,
+                guardrail_content,
+                guardrail_words,
+                prompt_caching,
+            ) = (None, None, None, None, None, None, None, None, None, None, None, None)
 
         metric_params = MetricParams(
-            token_histogram, choice_counter, duration_histogram, exception_counter
+            token_histogram,
+            choice_counter,
+            duration_histogram,
+            exception_counter,
+            guardrail_activation,
+            guardrail_latency_histogram,
+            guardrail_coverage,
+            guardrail_sensitive_info,
+            guardrail_topic,
+            guardrail_content,
+            guardrail_words,
+            prompt_caching,
         )
 
         for wrapped_method in WRAPPED_METHODS:

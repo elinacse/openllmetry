@@ -15,6 +15,7 @@ class Instruments(Enum):
     LANGCHAIN = "langchain"
     LLAMA_INDEX = "llama_index"
     MARQO = "marqo"
+    MCP = "mcp"
     MILVUS = "milvus"
     MISTRAL = "mistral"
     OLLAMA = "ollama"
